@@ -90,4 +90,6 @@ concurrent connections in a server side network program:
 
 
 couple of questions :
- why use avl tree to store the data ?
+ why use avl tree to store the data ? actually there is no reason , real redis uses hashtables and zsets as they are easier to scale and access concurrently but for learning
+ purposes I am implementing this in an avl tree 
+  
