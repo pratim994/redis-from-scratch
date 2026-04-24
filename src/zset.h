@@ -1,36 +1,38 @@
 #pragma once
-
 #include "avl.h"
 #include "hashtable.h"
+#include <cstddef>
+#include <cstdint>
+#include <string_view>
+
+// A single member of the sorted set.
+struct ZNode {
+    AVLNode  tree;         // in the score-ordered AVL tree
+    HNode    hmap;         // in the name→node hash map
+    double   score  = 0;
+    size_t   len    = 0;   // length of name[]
+    char     name[]; // NOLINT: C99 flexible array — intentional for inline storage
+};
 
 struct ZSet {
-    AVLNode *root = NULL;
-    Hmap hmap;
+    AVLNode* root = nullptr;
+    HMap     hmap;
 };
 
-struct ZNode {
+// Returns true if the member was newly added, false if score was updated.
+bool zset_insert(ZSet& zset, std::string_view name, double score);
 
-    AVLNode tree;
+// Returns nullptr if not found.
+ZNode* zset_lookup(ZSet& zset, std::string_view name);
 
-    HNode hmap;
+// Delete a member (caller must have obtained it from zset_lookup).
+void zset_delete(ZSet& zset, ZNode* node);
 
-    double score = 0;
+// Find the first node with (score, name) >= (score, name). Returns nullptr if none.
+ZNode* zset_seekge(ZSet& zset, double score, std::string_view name);
 
-    size_t len = 0;
+// Return the node 'offset' positions away in sorted order.
+ZNode* znode_offset(ZNode* node, int64_t offset);
 
-    char name[0];
-
-};
-
-
-bool zset_insert(ZSet *zset , const char *name, size_t len, double score);
-
-ZNode *zset_lookup(ZSet *zset, const char *name, size_t len);
-
-void zset_delete(ZSet *zset, ZNode *znode);
-
-ZNode *zset_seekge(ZSet *zset, double score, const char *name , size_t len);
-
-void zset_clear(ZSet *zset);
-
-ZNode *znode_offset(ZNode *node, int64_t offset);
+// Free all nodes and clear the set.
+void zset_clear(ZSet& zset);
