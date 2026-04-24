@@ -1,35 +1,51 @@
-#pragma once 
-
-#include <stddef.h>
-
-#include <stdint.h>
-
+#pragma once
+#include <cstddef>
+#include <cstdint>
+#include <functional>
 
 struct HNode {
-    HNode *next = NULL;
-
-    uint64_t hcode = 0;
+    HNode*   next  = nullptr;
+    uint64_t hcode = 0;   
 };
 
-struct HTab {
-    HNode **tab = NULL;
+using HEqFunc = std::function<bool(HNode*, HNode*)>;
 
-    size_t mask = 0;
-    size_t size = 0;
-};
-
+// Progressive-rehashing hash map (two tables, migrates k entries per operation).
 struct HMap {
-    HTab newer;
-    HTab older;
-    size_t migrate_pos = 0;
+    // Lookup. Returns nullptr if not found.
+    HNode* lookup(HNode* key, const HEqFunc& eq);
+    // Insert (caller must set key->hcode before calling).
+    void   insert(HNode* node);
+    // Delete. Returns the deleted node or nullptr.
+    HNode* remove(HNode* key, const HEqFunc& eq);
+    // Visit every node.  Return false from f to stop early.
+    void   foreach(std::function<bool(HNode*)> f);
+    // Number of entries across both tables.
+    [[nodiscard]] size_t size() const;
+    // Free all storage (nodes themselves are caller-owned).
+    void clear();
+
+    // HTab is public so free helper functions in the .cpp can accept it by ref.
+    struct HTab {
+        HNode**  tab  = nullptr;
+        uint64_t mask = 0;   // capacity - 1; capacity is always a power of two
+        size_t   sz   = 0;
+
+        void   init(size_t n);
+        void   insert(HNode* node);
+        HNode** lookup(HNode* key, const HEqFunc& eq);
+        void   free_storage();
+    };
+
+private:
+
+    void help_rehash();
+    void trigger_rehash();
+
+    HTab   newer_;
+    HTab   older_;
+    size_t migrate_pos_ = 0;
+
+    static constexpr size_t kRehashWork     = 128;
+    static constexpr size_t kMaxLoadFactor  = 8;
 };
-
-HNode *hm_lookup(HMap *hmap , HNode *key , bool (*eq)(HNode *, HNode *));
-
-void hm_insert(HMap *hmap , HNode *node);
-
-HNode *hm_delete(HMap *hmap , HNode *key , bool (*eq)(HNode *, HNode *));
-
-size_t hm_size(HMap *hmap);
-
-void hm_foreach(HMap *hmap , bool (*f)(HNode *, void *), void *arg);

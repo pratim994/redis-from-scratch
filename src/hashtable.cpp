@@ -1,187 +1,111 @@
-#include <assert.h>
-
-#include <stdlib.h>
-
 #include "hashtable.h"
+#include <cassert>
+#include <cstdlib>
+#include <cstring>
+#include <stdexcept>
 
-static void h_init(HTab *htab, size_t n){
 
-    assert(n > 0 && ((n-1) &n ) == 0);
-
-    htab->tab = (HNode **)calloc(n, sizeof(HNode *));
-    htab->mask = n -1;
-    htab->size = 0;
-
+void HMap::HTab::init(size_t n) {
+    assert(n > 0 && (n & (n - 1)) == 0);   // must be a power of two
+    tab  = static_cast<HNode**>(std::calloc(n, sizeof(HNode*)));
+    if (!tab) throw std::bad_alloc();
+    mask = n - 1;
+    sz   = 0;
 }
 
-static void h_insert(HTab *htab , HNode *node){
-
-    size_t pos = node->hcode & htab->mask;
-
-    HNode *next = htab->tab[pos];
-
-    node->next = next;
-    htab->tab[pos] = node;
-
-    htab->size++;
-
-
+void HMap::HTab::insert(HNode* node) {
+    size_t pos  = node->hcode & mask;
+    node->next  = tab[pos];
+    tab[pos]    = node;
+    ++sz;
 }
 
-static HNode **h_lookup(HTab *htab, HNode *key, bool (*eq)(HNode *, HNode *)){
-
-    if(!htab->tab){
-        return NULL;
+HNode** HMap::HTab::lookup(HNode* key, const HEqFunc& eq) {
+    if (!tab) return nullptr;
+    size_t  pos  = key->hcode & mask;
+    HNode** from = &tab[pos];
+    for (HNode* cur; (cur = *from) != nullptr; from = &cur->next) {
+        if (cur->hcode == key->hcode && eq(cur, key)) return from;
     }
-
-    size_t pos = key->hcode & htab->mask;
-
-    HNode **from = &htab->tab[pos];
-
-    for(HNode *cur; (curr = *from) != NULL ; from = &cur->next) {
-        if(cur->hcode == key->hcode && eq(cur, key)){
-            return from;
-        }
-    }
-
-    return NULL;
+    return nullptr;
 }
 
-static HNode *h_detach(HTab *htab, HNode **from){
-    HNode *node = *from;
-    *from = node->next;
+void HMap::HTab::free_storage() {
+    std::free(tab);
+    tab  = nullptr;
+    mask = 0;
+    sz   = 0;
+}
 
-    htab->size--;
+
+static HNode* h_detach(HMap::HTab& htab, HNode** from) {
+    HNode* node = *from;
+    *from       = node->next;
+    --htab.sz;
     return node;
-
-
 }
 
-const size_t k_rehashing_work = 128;
-
-static void hm_help_rehashing(HMap *hmap){
-
+void HMap::help_rehash() {
     size_t nwork = 0;
-
-    while(nwork < k_rehashing_work && hmap->older.size > 0){
-
-        HNode **from  = &hmap->older.tab[hmap->migrate_pos];
-
-        if(!*from){
-            hmap->migrate_pos++;
-            continue;
-        }
-
-        h_insert(&hmap->newer, h_detach(&hmap->older, from));
-        nwork++;
+    while (nwork < kRehashWork && older_.sz > 0) {
+        HNode** from = &older_.tab[migrate_pos_];
+        if (!*from) { ++migrate_pos_; continue; }
+        newer_.insert(h_detach(older_, from));
+        ++nwork;
     }
-
-    if(hmap->older.size == 0 && hmap->older.tab){
-
-        free(hmap->older.tab);
-        hmap->older = HTab{};
+    if (older_.sz == 0 && older_.tab) {
+        older_.free_storage();
     }
-
 }
 
-static void hm_trigger_rehashing(HMap *hmap){
-
-
-    assert(hmap->older.tab == NULL);
-
-    hmap->older = hmap->newer;
-
-    h_init(&hmap->newer, (hmap->newer.mask + 1)*2);
-
-    hmap->migrate_pos = 0;
-
-
+void HMap::trigger_rehash() {
+    assert(!older_.tab);
+    older_       = newer_;
+    newer_.init((older_.mask + 1) * 2);
+    migrate_pos_ = 0;
 }
 
-HNode *hm_lookup(HMap *hmap , HNode *key, bool (*eq)(HNode *, Hnode *)){
+HNode* HMap::lookup(HNode* key, const HEqFunc& eq) {
+    help_rehash();
+    HNode** from = newer_.lookup(key, eq);
+    if (!from)  from = older_.lookup(key, eq);
+    return from ? *from : nullptr;
+}
 
-    hm_help_rehashing(hmap);
-    HNode **from = h_lookup(&hmap->newer, key, eq);
+void HMap::insert(HNode* node) {
+    if (!newer_.tab) newer_.init(4);
+    newer_.insert(node);
 
-    if(!from){
-        from = h_lookup(&hmap->older, key, eq);
-
+    if (!older_.tab) {
+        size_t threshold = (newer_.mask + 1) * kMaxLoadFactor;
+        if (newer_.sz >= threshold) trigger_rehash();
     }
-    return from ? *from :NULL;
+    help_rehash();
 }
 
-
-const size_t k_max_load_factor = 8;
-
-void hm_insert(HMap *hmap , HNode *node){
-
-    if(!hmap->newer.tab){
-        h_init(&hmap->newer, 4);
-    }
-
-    h_insert(&hmap->newer, node);
-
-    if(!hmap->older.tab){
-
-        size_t shreshold = (hmap->newer.mask + 1)*k_max_load_factor;
-
-        if(hmap->newer.size >= shreshold){
-
-            hm_trigger_rehashing(hmap);
-        }
-
-    }
-    hm_help_rehashing(hmap);
+HNode* HMap::remove(HNode* key, const HEqFunc& eq) {
+    help_rehash();
+    if (HNode** from = newer_.lookup(key, eq)) return h_detach(newer_, from);
+    if (HNode** from = older_.lookup(key, eq)) return h_detach(older_, from);
+    return nullptr;
 }
 
-HNode *hm_delete(HMap *hmap , HNode *key, bool (*eq)(HNode *, HNode *)){
-
-    hm_help_rehashing(hmap);
-
-    if(HNode **from = h_lookup(&hmap->newer, key, eq)){
-        return h_detach(&hmap->newer, from);
-    }
-
-    if(HNode **from = h_lookup(&hmap->older, key, eq)){
-
-        return h_detach(&hmap->older, from);
-
-    }
-    return NULL;
-
-
-}
-
-
-void hm_clear(HMap *hmap){
-
-    free(hap->newer.tab);
-    free(hmap->older.tab);
-    *hmap = HMap{};
-
-}
-
-size_t hm_size(HMap *hmap){
-
-    return hmap->newer.size + hmap->older.size;
-
-}
-
-static bool h_foreach(HTab *htab, bool (*f)(HNode *, void *), oid *arg){
-
-    for(size_t i = 0; htab->mask != 0 && i <= htab->mask; i++){
-        for(HNode *node = htab->tab[i]; node != NULL; node = node->next){
-            if(!if(node, arg)){
-                return false;
+void HMap::foreach(std::function<bool(HNode*)> f) {
+    auto visit = [&](HTab& ht) -> bool {
+        if (!ht.tab) return true;
+        for (size_t i = 0; i <= ht.mask; ++i) {
+            for (HNode* n = ht.tab[i]; n; n = n->next) {
+                if (!f(n)) return false;
             }
         }
-    }
-    return true;
-
+        return true;
+    };
+    if (visit(newer_)) visit(older_);
 }
 
-void hm_foreach(HMap *hmap, bool (*f)(HNode *, void *), void *arg){
+size_t HMap::size() const { return newer_.sz + older_.sz; }
 
-    h_foreach(&hmap->newer, f, arg) && h_foreach(&hmap->older, f, arg);
-
+void HMap::clear() {
+    newer_.free_storage();
+    older_.free_storage();
 }
