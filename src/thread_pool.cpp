@@ -1,57 +1,41 @@
-#include <assert.h>
-
 #include "thread_pool.h"
+#include <cassert>
 
-
-static void *worker(void *arg){
-    ThreadPool *tp = (ThreadPool *)arg;
-    while(true){
-
-        pthread_mutex_lock(&tp->mu);
-
-        while(tp->queue.empty()){
-            pthread_cond_wait(&tp->not_empty, &tp->mu);
-        }
-
-        Work w = tp->queue.front();
-        tp->queue.pop_front();
-
-        pthread_mutex_unlock(&tp->mu);
-
-        w.f(w.arg);
-    }
-
-    return NULL;
-
-
-}
-
-
-void thread_pool_init(ThreadPool *tp , size_t num_threads){
-
+ThreadPool::ThreadPool(size_t num_threads) {
     assert(num_threads > 0);
-
-    int rv = pthread_mutex_init(&tp->mu , NULL);
-    assert(rv == 0);
-
-    rv = pthread_cond_init(&tp->not_empty, NULL);
-    assert(rv == 0);
-
-    tp->threads.resize(num_threads);
-
-    for(size_t i = 0; i < num_threads; ++i){
-        int rv = pthread_create(&tp->threads[i], NULL, &worker, tp);
-
-        assert(rv == 0);
+    workers_.reserve(num_threads);
+    for (size_t i = 0; i < num_threads; ++i) {
+        workers_.emplace_back(&ThreadPool::worker_loop, this);
     }
-
 }
 
-void thread_pool_queue(ThreadPool *tp , void (*f)(void*), void *arg) {
+ThreadPool::~ThreadPool() {
+    {
+        std::lock_guard<std::mutex> lock(mu_);
+        stop_ = true;
+    }
+    cv_.notify_all();
+    for (auto& t : workers_) t.join();
+}
 
-    pthread_mutex_lock(&tp->mu);
-    tp->queue.push_back(Work, {f, arg});
+void ThreadPool::enqueue(std::function<void()> task) {
+    {
+        std::lock_guard<std::mutex> lock(mu_);
+        queue_.push_back(std::move(task));
+    }
+    cv_.notify_one();
+}
 
-    pthread_cond_signal(&tp->not_empty);
-    pthread_mutex_unlock(&tp->mu);
+void ThreadPool::worker_loop() {
+    while (true) {
+        std::function<void()> task;
+        {
+            std::unique_lock<std::mutex> lock(mu_);
+            cv_.wait(lock, [this] { return stop_ || !queue_.empty(); });
+            if (stop_ && queue_.empty()) return;
+            task = std::move(queue_.front());
+            queue_.pop_front();
+        }
+        task();
+    }
 }

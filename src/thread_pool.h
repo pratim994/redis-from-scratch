@@ -1,25 +1,30 @@
 #pragma once
-
-#include <stddef.h>
-#include <pthread.h>
-#include <vector>
+#include <functional>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 #include <deque>
+#include <vector>
+#include <atomic>
 
+class ThreadPool {
+public:
+    explicit ThreadPool(size_t num_threads);
+    ~ThreadPool();
 
-struct Work {
-    
-    void (*f)(void *) = NULL;
-    void *arg = NULL;
+    // Submit a task.  Thread-safe.
+    void enqueue(std::function<void()> task);
+
+    // Non-copyable, non-movable
+    ThreadPool(const ThreadPool&)  = delete;
+    ThreadPool& operator=(const ThreadPool&) = delete;
+
+private:
+    void worker_loop();
+
+    std::vector<std::thread>  workers_;
+    std::deque<std::function<void()>> queue_;
+    std::mutex   mu_;
+    std::condition_variable  cv_;
+    std::atomic<bool> stop_{false};
 };
-
-struct ThreadPool {
-    std::vector<pthread_t> threads;
-
-    std::deque<Work> queue;
-
-    pthread_mutex_t mu;
-    pthread_cond_t not_empty;
-};
-
-void thread_pool_init(ThreadPool *tp, size_t num_threads);
-void thread_pool_queue(ThreadPool *tp , void (*f)(void *), void *arg);
