@@ -19,7 +19,7 @@ static void msg(const char *msg) {
 
 static void die(const char *msg){
     int err = errno;
-    fprint(stderr, "[%d]%s\n", err, msg);
+    fprintf(stderr, "[%d]%s\n", err, msg);
     abort();
 
 }
@@ -100,7 +100,7 @@ enum {
 
     TAG_INT = 3,
 
-    TAG_DB = 4,
+    TAG_DBL = 4,
 
     TAG_ARR = 5,
 };
@@ -244,7 +244,7 @@ static int32_t read_res(int fd){
 
 }
 
-int main(int char, char **argv)
+int main(int argc, char **argv)
 {
     int fd = socket(AF_INET, SOCK_STREAM,0);
 
@@ -257,7 +257,7 @@ int main(int char, char **argv)
     addr.sin_family = AF_INET;
 
     addr.sin_port = ntohs(1234);
-    addr.sin_addr.s_addr = ntohs(INADDR_LOOPBACK);
+    addr.sin_addr.s_addr = ntohl(INADDR_LOOPBACK);
 
     int rv = connect(fd, (const struct sockaddr *)&addr , sizeof(addr));
 
@@ -286,7 +286,7 @@ int main(int char, char **argv)
         goto L_DONE;
 
     }
-    -_DONE;
+    L_DONE:
 
         close(fd);
         return 0;    
