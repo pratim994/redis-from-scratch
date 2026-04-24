@@ -1,80 +1,47 @@
-#include "heaph.h"
+#include "heap.h"
+#include <cassert>
 
-static size_t heap_parent(size_t i){
-
-    return (i+1)/2-1;
-
+static void heap_swap(HeapItem* a, size_t i, size_t j) {
+    std::swap(a[i], a[j]);
+    *a[i].ref = i;
+    *a[j].ref = j;
 }
 
-static size_t heap_left(size_t i){
-
-    return i*2 + 1;
-
-}
-
-static size_t heap_right(size_t i){
-
-    return i*2 + 2;
-}
-
-static void heap_up(HeapItem *a , size_t pos){
-    HeapItem t = a[pos];
-
-    while(pos > 0 && a[heap_parent(pos)].val > t.val)
-    {
-        a[pos] = a[heap_parent(pos)];
-
-        *a[pos].ref = pos;
-
-        pos =heap_parent(pos);
+void heap_update(HeapItem* a, size_t pos, size_t len) {
+    // Sift up
+    while (pos > 0) {
+        size_t parent = (pos - 1) / 2;
+        if (a[parent].val <= a[pos].val) break;
+        heap_swap(a, parent, pos);
+        pos = parent;
     }
-    a[pos] = t;
-    *a[pos].ref = pos;
+    // Sift down
+    while (true) {
+        size_t smallest = pos;
+        size_t l = 2 * pos + 1;
+        size_t r = 2 * pos + 2;
+        if (l < len && a[l].val < a[smallest].val) smallest = l;
+        if (r < len && a[r].val < a[smallest].val) smallest = r;
+        if (smallest == pos) break;
+        heap_swap(a, pos, smallest);
+        pos = smallest;
+    }
 }
 
-static void heap_down(HeapItem *a, size_t pos, size_t len){
-
-    HeapItem t = a[pos];
-
-    while(true){
-
-        size_t l = heap_left(pos);
-
-        size_t r = heap_right(pos);
-
-        size_t min_pos = pos;
-
-        uint64_t min_val = t.val;
-
-        if(l < len && a[l].val < min_val) {
-
-            min_pos = l;
-            min_val = a[l].val;
-        }
-        if(r < len && a[r].val < min_val){
-            min_pos = r;
-        }
-
-        if(min_pos == pos){
-            break;
-        }
-
-        a[pos] = a[min_pos];
-        *a[pos].ref = pos;
-        pos = min_pos;
+void heap_delete(std::vector<HeapItem>& heap, size_t pos) {
+    heap[pos] = heap.back();
+    heap.pop_back();
+    if (pos < heap.size()) {
+        heap_update(heap.data(), pos, heap.size());
     }
-    a[pos] = t;
-    *a[pos].ref = pos;
 }
 
-void heap_update(HeapItem *a, size_t pos, size_t len){
-
-    if(pos > 0 && a[heap_parent(pos)].val > a[pos].val) {
-
-        heap_up(a, pos);
-
+void heap_upsert(std::vector<HeapItem>& heap, size_t pos, HeapItem item) {
+    if (pos < heap.size()) {
+        heap[pos] = item;
+    } else {
+        pos = heap.size();
+        heap.push_back(item);
     }
-    else {
-        heap_down(a, pos, len);
-    }
+    heap_update(heap.data(), pos, heap.size());
 }
