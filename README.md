@@ -1,8 +1,12 @@
-# RedisCpp
+# Redis
 
-A pr# RedisCpp
 
 A production-quality, Redis-like in-memory key-value store written in modern C++17.  
+
+---
+## High level system design 
+
+<img width="1736" height="578" alt="Screenshot from 2026-04-25 10-58-59" src="https://github.com/user-attachments/assets/e1843429-80e4-4791-b4f6-f5eba2fa40dc" />
 
 ---
 
@@ -54,7 +58,6 @@ tests/                        – GoogleTest unit tests
 
 - CMake ≥ 3.16
 - GCC ≥ 9 or Clang ≥ 10 (C++17 required)
-- `pthread`
 - Internet access (CMake fetches GoogleTest automatically)
 
 ### Build all targets
@@ -264,5 +267,10 @@ Tags: `0`=nil, `1`=error, `2`=string, `3`=int64, `4`=double, `5`=array.
 - Hash map rehashing is progressive: at most 128 nodes migrated per operation.
 - Buffer consume is O(1) (read offset), compacted lazily when half the buffer is dead.
 - AVL tree operations are O(log n); no global locks are held during tree traversal.
-- For higher throughput on Linux, replace `poll` with `epoll` (the `handle_read`/`handle_write` callbacks are already decoupled from the polling mechanism).
+
+
+---
+## Results 
+<img width="774" height="858" alt="Screenshot from 2026-04-25 11-44-46" src="https://github.com/user-attachments/assets/2b8e6644-f6fc-4279-9463-14afb235a323" /><img width="735" height="944" alt="Screenshot from 2026-04-25 11-45-12" src="https://github.com/user-attachments/assets/e49071a6-cfac-4328-8ec4-28c45caee326" />
+
 
