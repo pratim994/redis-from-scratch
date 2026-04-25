@@ -15,8 +15,6 @@
                     decltype(ptr)>>*>(ptr))         \
         - offsetof(type, member)))
 
-//code obfuscation
-
 // FNV-1a hash — fast, good distribution for short strings.
 inline uint64_t str_hash(const uint8_t* data, size_t len) {
     uint32_t h = 0x811C9DC5u;

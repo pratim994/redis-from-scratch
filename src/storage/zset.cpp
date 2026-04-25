@@ -5,6 +5,7 @@
 #include <cstring>
 #include <algorithm>
 
+// ─── ZNode allocation ────────────────────────────────────────────────────────
 
 static ZNode* znode_new(std::string_view name, double score) {
     ZNode* node = static_cast<ZNode*>(std::malloc(sizeof(ZNode) + name.size()));
@@ -20,6 +21,7 @@ static ZNode* znode_new(std::string_view name, double score) {
 
 static void znode_free(ZNode* node) { std::free(node); }
 
+// ─── comparator ──────────────────────────────────────────────────────────────
 
 // Returns true if AVLNode 'lhs' is strictly less than (score, name).
 static bool zless(const AVLNode* lhs, double score, std::string_view name) {
@@ -34,6 +36,7 @@ static bool zless(const AVLNode* lhs, const AVLNode* rhs) {
     return zless(lhs, zr->score, {zr->name, zr->len});
 }
 
+// ─── tree helpers ─────────────────────────────────────────────────────────────
 
 static void tree_insert(ZSet& zset, ZNode* node) {
     AVLNode*  parent = nullptr;
@@ -55,6 +58,7 @@ static void zset_update(ZSet& zset, ZNode* node, double score) {
     tree_insert(zset, node);
 }
 
+// ─── hmap equality ───────────────────────────────────────────────────────────
 
 // Lookup key stored on the stack (no heap allocation needed).
 struct ZKey {
@@ -69,6 +73,7 @@ static bool hcmp(HNode* node, HNode* key) {
     return zname == zk->name;
 }
 
+// ─── public API ──────────────────────────────────────────────────────────────
 
 bool zset_insert(ZSet& zset, std::string_view name, double score) {
     ZNode* node = zset_lookup(zset, name);

@@ -15,18 +15,18 @@
 #include <netinet/in.h>
 #include <vector>
 
-//Constants 
+// ─── Constants ───────────────────────────────────────────────────────────────
 static constexpr size_t   kMaxMsg          = 32u << 20;   // 32 MiB
 static constexpr size_t   kMaxArgs         = 200'000;
 static constexpr uint64_t kIdleTimeoutMs   = 5'000;
 static constexpr uint16_t kPort            = 1234;
 static constexpr int      kThreadPoolSize  = 4;
 
-//  Serialization tags (must match client) 
+// ─── Serialization tags (must match client) ──────────────────────────────────
 enum class ErrCode : uint32_t { Unknown = 1, TooBig = 2, BadType = 3, BadArg = 4 };
 enum class Tag     : uint8_t  { Nil=0, Err=1, Str=2, Int=3, Dbl=4, Arr=5 };
 
-//  Connection 
+// ─── Connection ──────────────────────────────────────────────────────────────
 struct Conn {
     int     fd           = -1;
     bool    want_read    = false;
@@ -41,14 +41,14 @@ struct Conn {
 // fd → Conn* map (indexed by fd number)
 static std::vector<Conn*> fd2conn;
 
-//  fd helpers 
+// ─── fd helpers ──────────────────────────────────────────────────────────────
 static void fd_set_nb(int fd) {
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags < 0) die("fcntl F_GETFL");
     if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) < 0) die("fcntl F_SETFL");
 }
 
-// Connection management 
+// ─── Connection management ───────────────────────────────────────────────────
 static void conn_put(Conn* conn) {
     if (fd2conn.size() <= static_cast<size_t>(conn->fd))
         fd2conn.resize(conn->fd + 1, nullptr);
@@ -63,7 +63,7 @@ static void conn_destroy(Conn* conn) {
     delete conn;
 }
 
-//  Protocol parsing 
+// ─── Protocol parsing ────────────────────────────────────────────────────────
 static int32_t parse_req(const uint8_t* data, size_t size,
                           std::vector<std::string>& out) {
     const uint8_t* end = data + size;
@@ -86,7 +86,7 @@ static int32_t parse_req(const uint8_t* data, size_t size,
     return (data == end) ? 0 : -1;
 }
 
-// Response framing
+// ─── Response framing ────────────────────────────────────────────────────────
 static void response_begin(Buffer& out, size_t& header_pos) {
     header_pos = out.abs_write_pos();
     out.append_u32(0);   // placeholder for length
@@ -108,7 +108,7 @@ static void response_end(Buffer& out, size_t header_pos) {
     std::memcpy(out.data_at(header_pos), &len, 4);
 }
 
-//  Request processing
+// ─── Request processing ──────────────────────────────────────────────────────
 static bool try_one_request(Conn* conn) {
     if (conn->incoming.readable() < 4) return false;
 
@@ -138,7 +138,7 @@ static bool try_one_request(Conn* conn) {
     return true;
 }
 
-// I/O handlers 
+// ─── I/O handlers ────────────────────────────────────────────────────────────
 static void handle_write(Conn* conn) {
     assert(!conn->outgoing.empty());
     ssize_t rv = ::write(conn->fd, conn->outgoing.read_ptr(), conn->outgoing.readable());
@@ -171,6 +171,7 @@ static void handle_read(Conn* conn) {
     }
     conn->incoming.append(buf, static_cast<size_t>(rv));
 
+    // Process all complete requests (pipelining support)
     while (try_one_request(conn)) {}
 
     if (!conn->outgoing.empty()) {
@@ -180,7 +181,7 @@ static void handle_read(Conn* conn) {
     }
 }
 
-// Accept 
+// ─── Accept ──────────────────────────────────────────────────────────────────
 static void handle_accept(int listen_fd) {
     sockaddr_in client_addr = {};
     socklen_t   addrlen     = sizeof(client_addr);
@@ -204,7 +205,7 @@ static void handle_accept(int listen_fd) {
     conn_put(conn);
 }
 
-// Timer management
+// ─── Timer management ────────────────────────────────────────────────────────
 static bool hnode_same(HNode* a, HNode* b) { return a == b; }
 
 static void process_timers() {
@@ -246,6 +247,7 @@ static int32_t next_timer_ms() {
     return static_cast<int32_t>(next_ms - now_ms);
 }
 
+// ─── main ────────────────────────────────────────────────────────────────────
 int main() {
     // Init idle list sentinel
     dlist_init(&g_data.idle_list);

@@ -3,9 +3,10 @@
 #include <cstdint>
 #include <functional>
 
+// Intrusive singly-linked hash node.  Embed in your struct.
 struct HNode {
     HNode*   next  = nullptr;
-    uint64_t hcode = 0;   
+    uint64_t hcode = 0;   // full hash, not masked
 };
 
 using HEqFunc = std::function<bool(HNode*, HNode*)>;

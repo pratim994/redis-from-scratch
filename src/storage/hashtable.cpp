@@ -4,6 +4,7 @@
 #include <cstring>
 #include <stdexcept>
 
+// ─── HTab ────────────────────────────────────────────────────────────────────
 
 void HMap::HTab::init(size_t n) {
     assert(n > 0 && (n & (n - 1)) == 0);   // must be a power of two
@@ -37,7 +38,9 @@ void HMap::HTab::free_storage() {
     sz   = 0;
 }
 
+// ─── HMap ────────────────────────────────────────────────────────────────────
 
+// Detach a node (at *from) from htab without touching newer_/older_.
 static HNode* h_detach(HMap::HTab& htab, HNode** from) {
     HNode* node = *from;
     *from       = node->next;

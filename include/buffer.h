@@ -6,6 +6,7 @@
 #include <string_view>
 
 // A simple read/write buffer with O(1) consume via a read offset.
+// Avoids O(n) erase-from-front used in the original code.
 class Buffer {
 public:
     // Append raw bytes to the write end.
@@ -45,7 +46,7 @@ public:
 
     // Direct access into the underlying storage (for writev / scatter-gather).
     [[nodiscard]] const uint8_t* data_at(size_t abs_pos) const { return buf_.data() + abs_pos; }
-    [[nodiscard]]  uint8_t* data_at(size_t abs_pos)       { return buf_.data() + abs_pos; }
+    [[nodiscard]]       uint8_t* data_at(size_t abs_pos)       { return buf_.data() + abs_pos; }
     [[nodiscard]] size_t abs_write_pos() const { return buf_.size(); }
 
     void resize_to(size_t abs_pos) { buf_.resize(abs_pos); }
@@ -53,5 +54,5 @@ public:
 
 private:
     std::vector<uint8_t> buf_;
-    size_t  roff_ = 0;
+    size_t               roff_ = 0;
 };

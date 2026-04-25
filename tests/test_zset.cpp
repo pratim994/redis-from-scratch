@@ -4,7 +4,7 @@
 #include <string>
 #include <cmath>
 
-//  Tests
+// ─── Tests ───────────────────────────────────────────────────────────────────
 
 TEST(ZSet, InsertAndLookup) {
     ZSet zset;

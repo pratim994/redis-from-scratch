@@ -16,15 +16,15 @@ public:
     void enqueue(std::function<void()> task);
 
     // Non-copyable, non-movable
-    ThreadPool(const ThreadPool&)  = delete;
+    ThreadPool(const ThreadPool&)            = delete;
     ThreadPool& operator=(const ThreadPool&) = delete;
 
 private:
     void worker_loop();
 
-    std::vector<std::thread>  workers_;
+    std::vector<std::thread>          workers_;
     std::deque<std::function<void()>> queue_;
-    std::mutex   mu_;
-    std::condition_variable  cv_;
-    std::atomic<bool> stop_{false};
+    std::mutex                        mu_;
+    std::condition_variable           cv_;
+    std::atomic<bool>                 stop_{false};
 };

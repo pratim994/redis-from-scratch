@@ -11,7 +11,7 @@ struct ZNode {
     HNode    hmap;         // in the name→node hash map
     double   score  = 0;
     size_t   len    = 0;   // length of name[]
-    char     name[]; // NOLINT: C99 flexible array — intentional for inline storage
+    char     name[]; // 
 };
 
 struct ZSet {

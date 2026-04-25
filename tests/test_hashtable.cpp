@@ -26,7 +26,7 @@ static KVNode* make_kv(const std::string& k, int v) {
     return n;
 }
 
-//Tests
+// ─── Tests ───────────────────────────────────────────────────────────────────
 
 TEST(HashTable, BasicInsertAndLookup) {
     HMap map;

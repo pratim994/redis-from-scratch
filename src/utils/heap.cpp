@@ -29,7 +29,9 @@ void heap_update(HeapItem* a, size_t pos, size_t len) {
 }
 
 void heap_delete(std::vector<HeapItem>& heap, size_t pos) {
+    // Move last item into the gap, update its back-pointer, then rebalance.
     heap[pos] = heap.back();
+    *heap[pos].ref = pos;
     heap.pop_back();
     if (pos < heap.size()) {
         heap_update(heap.data(), pos, heap.size());
@@ -43,5 +45,8 @@ void heap_upsert(std::vector<HeapItem>& heap, size_t pos, HeapItem item) {
         pos = heap.size();
         heap.push_back(item);
     }
+    // Write the actual slot index back before sifting (heap_update only
+    // updates via heap_swap; if no swap occurs the ref would remain stale).
+    *item.ref = pos;
     heap_update(heap.data(), pos, heap.size());
 }

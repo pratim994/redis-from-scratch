@@ -2,21 +2,21 @@
 #include <cassert>
 #include <algorithm>
 
+// ─── helpers ────────────────────────────────────────────────────────────────
 
 static void avl_update(AVLNode* n) {
     n->height = 1 + std::max(avl_height(n->left), avl_height(n->right));
     n->cnt    = 1 + avl_cnt(n->left) + avl_cnt(n->right);
 }
 
-// Left rotation:  node becomes left child of its current right child.
 static AVLNode* rot_left(AVLNode* node) {
     AVLNode* rchild = node->right;
-    AVLNode* inner  = rchild->left;   // may be nullptr
+    AVLNode* inner  = rchild->left;
 
     rchild->left = node;
     node->right  = inner;
 
-    rchild->parent = node->parent;   // caller links rchild into the parent
+    rchild->parent = node->parent;
     node->parent   = rchild;
     if (inner) inner->parent = node;
 
@@ -25,10 +25,9 @@ static AVLNode* rot_left(AVLNode* node) {
     return rchild;
 }
 
-// Right rotation: node becomes right child of its current left child.
 static AVLNode* rot_right(AVLNode* node) {
     AVLNode* lchild = node->left;
-    AVLNode* inner  = lchild->right;  // may be nullptr
+    AVLNode* inner  = lchild->right;
 
     lchild->right = node;
     node->left    = inner;
@@ -42,9 +41,7 @@ static AVLNode* rot_right(AVLNode* node) {
     return lchild;
 }
 
-// Fix left-heavy imbalance (left subtree is 2 taller than right).
 static AVLNode* avl_fix_left(AVLNode* node) {
-    // LR case: rotate left child left first to make it LL
     if (avl_height(node->left->left) < avl_height(node->left->right)) {
         node->left         = rot_left(node->left);
         node->left->parent = node;
@@ -52,9 +49,7 @@ static AVLNode* avl_fix_left(AVLNode* node) {
     return rot_right(node);
 }
 
-// Fix right-heavy imbalance (right subtree is 2 taller than left).
 static AVLNode* avl_fix_right(AVLNode* node) {
-    // RL case: rotate right child right first to make it RR
     if (avl_height(node->right->right) < avl_height(node->right->left)) {
         node->right         = rot_right(node->right);
         node->right->parent = node;
@@ -62,16 +57,14 @@ static AVLNode* avl_fix_right(AVLNode* node) {
     return rot_left(node);
 }
 
+// ─── public API ─────────────────────────────────────────────────────────────
 
 AVLNode* avl_fix(AVLNode* node) {
     while (true) {
-        // Determine the parent's child pointer that currently points at node
         AVLNode** from   = nullptr;
         AVLNode*  parent = node->parent;
-
-        if (parent) {
+        if (parent)
             from = (parent->left == node) ? &parent->left : &parent->right;
-        }
 
         avl_update(node);
 
@@ -90,76 +83,83 @@ AVLNode* avl_fix(AVLNode* node) {
             node = fixed;
         }
 
-        if (!parent) return node;  // reached the root
+        if (!parent) return node;
         node = parent;
     }
 }
 
-// Remove a node that has at most one child (the easy case).
 static AVLNode* avl_del_easy(AVLNode* node) {
     assert(!node->left || !node->right);
-
     AVLNode* child  = node->left ? node->left : node->right;
     AVLNode* parent = node->parent;
-
     if (child) child->parent = parent;
-
-    if (!parent) return child;  // deleted root; child is new root
-
+    if (!parent) return child;
     AVLNode** from = (parent->left == node) ? &parent->left : &parent->right;
     *from = child;
     return avl_fix(parent);
 }
 
 AVLNode* avl_del(AVLNode* node) {
-    // Node has two children: swap with in-order successor then delete the successor.
     if (node->left && node->right) {
         AVLNode* victim = node->right;
         while (victim->left) victim = victim->left;
-
         AVLNode* new_root = avl_del_easy(victim);
-
-        // Transplant victim into node's position
         *victim = *node;
         if (victim->left)  victim->left->parent  = victim;
         if (victim->right) victim->right->parent = victim;
-
-        AVLNode** from = nullptr;
         if (node->parent) {
-            from = (node->parent->left == node)
-                 ? &node->parent->left
-                 : &node->parent->right;
+            AVLNode** from = (node->parent->left == node)
+                           ? &node->parent->left : &node->parent->right;
             *from = victim;
         }
         return node->parent ? new_root : victim;
     }
-
     return avl_del_easy(node);
 }
 
-AVLNode* avl_offset(AVLNode* node, int64_t offset) {
-    // pos tracks the 0-based rank of 'node' relative to the initial 'node'.
-    int64_t pos = 0;
-    while (offset != pos) {
-        if (pos < offset && pos + (int64_t)avl_cnt(node->right) >= offset) {
-            // Target is in the right subtree
-            pos  += (int64_t)avl_cnt(node->left) + 1;
-            node  = node->right;
-        } else if (pos > offset && pos - (int64_t)avl_cnt(node->left) <= offset) {
-            // Target is in the left subtree
-            pos  -= (int64_t)avl_cnt(node->right) + 1;
-            node  = node->left;
+// ─── avl_offset (corrected rank arithmetic) ──────────────────────────────────
+//
+// Strategy: compute the absolute rank of `node` by walking to the root,
+// then seek to (rank + offset) from the root in a single downward pass.
+// This is O(log n) and sidesteps the tricky incremental pos-tracking.
+
+static int64_t avl_rank(AVLNode* node) {
+    // Rank = number of nodes that come before this one in sorted order.
+    int64_t rank = static_cast<int64_t>(avl_cnt(node->left));
+    while (node->parent) {
+        if (node->parent->right == node) {
+            // All of parent's left subtree + parent itself come before us.
+            rank += static_cast<int64_t>(avl_cnt(node->parent->left)) + 1;
+        }
+        node = node->parent;
+    }
+    return rank;
+}
+
+static AVLNode* avl_seek(AVLNode* root, int64_t target_rank) {
+    if (!root) return nullptr;
+    AVLNode* node = root;
+    while (node) {
+        int64_t left_cnt = static_cast<int64_t>(avl_cnt(node->left));
+        if (target_rank < left_cnt) {
+            node = node->left;
+        } else if (target_rank == left_cnt) {
+            return node;
         } else {
-            // Go up
-            AVLNode* parent = node->parent;
-            if (!parent) return nullptr;
-            if (parent->right == node) {
-                pos -= (int64_t)avl_cnt(node->left) + 1;
-            } else {
-                pos += (int64_t)avl_cnt(node->right) + 1;
-            }
-            node = parent;
+            target_rank -= left_cnt + 1;
+            node = node->right;
         }
     }
-    return node;
+    return nullptr;
+}
+
+AVLNode* avl_offset(AVLNode* node, int64_t offset) {
+    if (!node) return nullptr;
+    int64_t rank   = avl_rank(node) + offset;
+    // Walk to root to get total count.
+    AVLNode* root  = node;
+    while (root->parent) root = root->parent;
+    int64_t total  = static_cast<int64_t>(avl_cnt(root));
+    if (rank < 0 || rank >= total) return nullptr;
+    return avl_seek(root, rank);
 }

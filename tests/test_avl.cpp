@@ -55,7 +55,7 @@ static void free_tree(AVLNode* n) {
     delete container_of(n, IntNode, avl);
 }
 
-//Tests
+// ─── Tests ───────────────────────────────────────────────────────────────────
 
 TEST(AVL, InsertAndBalance) {
     AVLNode* root = nullptr;
